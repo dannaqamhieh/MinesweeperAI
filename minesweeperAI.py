@@ -3,51 +3,123 @@ from random import randint
 
 class MinesweeperAI:
 
+    wins = 0
+    loss = 0
     board = []
 
     def __init__(self, row_count, col_count, total_bomb_count,
                  seed=randint(0,100), bomb_locations=[], board=[],
-                 move_count=0):
+                 move_count=0, wins=0, loss=0):
         self.row_count = row_count
         self.col_count = col_count
         self.total_bomb_count = total_bomb_count
         self.game_over_state = False
 
+    def __delete__(self, instance):
+        del self.board
+        del self.row_count
+        del self.col_count
+        del self.total_bomb_count
+        del self.bomb_locations
+        del self.move_count
+        del self.game_over_state
+        del self.wins
+        del self.loss
+
     def AI_game(self):
-        print("\n-------------------- MINESWEEPER --------------------\n")
-        print("----- GAME START")
-        print("----- Board Size:", (self.row_count * self.col_count))
-        print("----- Mine Number:", self.total_bomb_count, "\n")
+        # print("\n-------------------- MINESWEEPER --------------------\n")
+        # print("      GAME START")
+        # print("      Board Size:", (self.row_count * self.col_count))
+        # print("      Mine Number:", self.total_bomb_count)
+        # print("      Mine Density:", (self.total_bomb_count/(self.row_count*self.col_count)))
+        # print("\n-----------------------------------------------------\n")
+        self.game_over_state = False
         self.make_board()
-        self.print_board()
+        # self.print_board()
+        self.hide_board()
+        self.reveal(1, 1)
+        self.update_probs()
+        self.greedy_prob_method()
+
 
         while self.game_over_state == False:
-            self.hide_board()
-            self.reveal(1, 1)
+            # self.print_board()
             self.trivial_parse()
-            self.print_board()
-            self.check_board()
+            # self.print_board()
+            # self.check_board()
             self.update_probs()
-            break
+            self.greedy_prob_method()
+            # self.print_all_probs()
+            self.AI_reveal()
+            self.update_probs()
+            self.greedy_prob_method()
+            # self.print_board()
+            # self.print_all_prob_lists()
+            # self.print_all_probs()
+            print(self.game_over_state)
 
-    def get_tile_prob(self, x, y): # return unknown_tiles / remaining mines
-        flagged_mines = 0
-        known_tiles = 0
-        mine_value = int(self.board[x][y].value)
-        neighbors = self.find_8neighbors(x, y)
-        total_tiles = len(neighbors)
-        for el in neighbors:
-            neighbor = self.board[el[0]][el[1]]
-            if neighbor.is_revealed == True:
-                if neighbor.value == "F":
-                    flagged_mines += 1
-                known_tiles += 1
-        unknown_tiles = total_tiles - known_tiles
-        mines_remaining = mine_value - flagged_mines
-        if mines_remaining > 0:
-            prob = mines_remaining / unknown_tiles
-            print(prob)
-            return prob
+        # self.print_board()
+        # self.print_all_probs()
+        if self.wins == 1:
+            return 1
+        else:
+            return 0
+
+    def AI_reveal(self):
+        """ Parse through every prob value for every tile in the grid. Reveal
+        the tile with the lowest probability of having a mine. If there are
+        multiple tiles with the same lowest probability, reveal the first.
+        """
+        lowest = 1.0
+        lowest_found = False
+        for i in range(1, self.row_count + 1):
+            for j in range(1, self.col_count + 1):
+                tile = self.board[int(i)][int(j)]
+                if len(tile.prob_list) > 0:
+                    if (tile.prob != 0) and (tile.prob <= 1.0):
+                        if tile.prob < lowest:
+                            lowest = tile.prob
+                            lowest_tile = tile
+                            lowest_found = True
+        # print(lowest)
+        # print("Reveal: (", lowest_tile.x_location, ",", lowest_tile.y_location, "):", lowest_tile.prob)
+        if lowest_found == True:
+            self.auto_reveal(lowest_tile.x_location, lowest_tile.y_location)
+
+    def average_prob_method(self):
+        """ Parse through every tile in the grid. Update the prob value
+        to be the average of all the values in the prob_list.
+        """
+        for i in range(1, self.row_count + 1):
+            for j in range(1, self.col_count + 1):
+                tile = self.board[int(i)][int(j)]
+                list = tile.prob_list
+                if len(list) > 0:
+                    total = 0
+                    for i in list:
+                        if i <= 1:
+                            total += idea
+                    average = total / len(list)
+                    tile.prob = average
+                else:
+                    tile.prob = 1.5
+
+    def greedy_prob_method(self):
+        """ Parse through every tile in the grid. Update the prob value
+        to be the highest of all the values in the prob_list.
+        """
+        for i in range(1, self.row_count + 1):
+            for j in range(1, self.col_count + 1):
+                tile = self.board[int(i)][int(j)]
+                list = tile.prob_list
+                if len(list) > 0:
+                    highest = 0
+                    for k in list:
+                        if k > highest and (k <= 1):
+                            highest = k
+                    tile.prob = highest
+                else:
+                    tile.prob = 1.5
 
     def update_probs(self):
         """" Parse through all known tiles that border at least one unknown
@@ -55,12 +127,26 @@ class MinesweeperAI:
         dividing the number of remaining mines for the known tile by the number
         of neighboring unkown tiles. Append this value to the probability list
         of each of the neighboring unknown tiles.
+
+        Also parse through all unknown tiles. Calculate the probability for
+        each unknown to be total_mines_remaining / total unknowns. Append
+        this value to the probability list for each.
         """
+        self.clear_prob_lists()
+        unknown_num = self.get_num_unknowns()
+        total_mines = self.get_num_mines_remaining()
+        if total_mines > 0:
+            prob_value = total_mines / unknown_num
+            for i in range(1, self.row_count + 1):
+                for j in range(1, self.col_count + 1):
+                    tile = self.board[i][j]
+                    if tile.is_revealed == False:
+                        tile.prob_list.append(prob_value)
 
         for i in range(1, self.row_count + 1):
             for j in range(1, self.col_count + 1):
                 tile = self.board[i][j]
-                if (tile.is_revealed == True) and tile.value != " " and tile.value != "F":
+                if (tile.is_revealed == True) and tile.value != " " and tile.value != "F" and tile.value != "B":
                     flagged_mines = 0
                     known_tiles = 0
                     mine_value = int(tile.value)
@@ -80,34 +166,7 @@ class MinesweeperAI:
                         prob = mines_remaining / len(unknowns)
                         for el in unknowns:
                             self.board[el.x_location][el.y_location].prob_list.append(prob)
-                            print("(", el.x_location, ",", el.y_location, "):", self.board[el.x_location][el.y_location].prob_list)
-
-
-
-
-        # for i in range(1, self.row_count + 1):
-        #     for j in range(1, self.col_count + 1):
-        #         tile = self.board[i][j]
-        #         if tile.is_revealed == False and tile.value != "B":
-        #             flagged_mines = 0
-        #             known_tiles = 0
-        #             mine_value = int(tile.value)
-        #             neighbors = self.find_8neighbors(i, j)
-        #             if len(neighbors) > 0:
-        #                 total_tiles = len(neighbors)
-        #                 for el in neighbors:
-        #                     neighbor = self.board[el[0]][el[1]]
-        #                     if neighbor.is_revealed == True:
-        #                         if neighbor.value == "F":
-        #                             flagged_mines += 1
-        #                         known_tiles += 1
-        #                 unknown_tiles = total_tiles - known_tiles
-        #                 mines_remaining = mine_value - flagged_mines
-        #                 prob = mines_remaining / unknown_tiles
-        #                 for el in neighbors:
-        #                     neighbor = self.board[el[0]][el[1]]
-        #                     neighbor.prob_list.append(prob)
-        #                 print(tile.prob_list, tile.x_location)
+                            # print("(", el.x_location, ",", el.y_location, "):", self.board[el.x_location][el.y_location].prob_list)
 
     def unknown_neighbors(self, i, j):
         neighbors = self.find_8neighbors(i, j)
@@ -121,6 +180,43 @@ class MinesweeperAI:
         except:
             return unknowns
         return unknowns
+
+    def get_num_unknowns(self):
+        count = 0
+        for i in range(1, self.row_count + 1):
+            for j in range(1, self.col_count + 1):
+                tile = self.board[i][j]
+                if tile.is_revealed == False:
+                    count += 1
+        return count
+
+    def get_num_mines_remaining(self):
+        count = 0
+        for i in range(1, self.row_count + 1):
+            for j in range(1, self.col_count + 1):
+                tile = self.board[i][j]
+                if tile.value == "F":
+                    count += 1
+        total_mines_remaining = self.total_bomb_count - count
+        return total_mines_remaining
+
+    def clear_prob_lists(self):
+        for i in range(1, self.row_count + 1):
+            for j in range(1, self.col_count + 1):
+                tile = self.board[i][j]
+                tile.prob_list = []
+
+    def print_all_prob_lists(self):
+        for i in range(1, self.row_count + 1):
+            for j in range(1, self.col_count + 1):
+                tile = self.board[i][j]
+                print("(", tile.x_location, ",", tile.y_location, "):", tile.prob_list)
+
+    def print_all_probs(self):
+        for i in range(1, self.row_count + 1):
+            for j in range(1, self.col_count + 1):
+                tile = self.board[i][j]
+                print("(", tile.x_location, ",", tile.y_location, "):", tile.prob)
 
     def check_board(self):
         """ Parse through entire board and verify that the values and flags
@@ -147,6 +243,15 @@ class MinesweeperAI:
         else:
             print("No contradictions detected.")
 
+    def get_num_flags(self):
+        ret = 0
+        for i in range(1, self.row_count+1):
+            for j in range(1, self.col_count+1):
+                if self.board[i][j].value != 'F':
+                    ret += 1
+
+        return ret
+
     def trivial_parse(self):
         """ Parse through entire board. If a known tile has the same number of
         surrounding flagged tiles as its value, reveal all surrounding tiles.
@@ -154,50 +259,65 @@ class MinesweeperAI:
         tiles, flag all surrounding tiles. Loop until no changes can be made.
         """
         updated = True
-        while updated == True:
+        # if self.get_num_flags() == self.total_bomb_count:
+        #     updated = False
+        #     for i in range(1, self.row_count+1):
+        #         for j in range(1, self.col_count+1):
+        #             if self.board[i][j].value != 'F' and not self.board[i][j].is_revealed:
+        #                 self.reveal(i, j)
+
+        while updated:
             updated = False
+            unknowns = 0
             for i in range(1, self.row_count + 1):
                 for j in range(1, self.col_count + 1):
-                    if (self.board[i][j].is_revealed == True) and (self.board[i][j].value != "F"):
-                        mine_value = int(self.board[i][j].value)
-                        flagged_mines = 0
-                        known_tiles = 0
-                        neighbors = self.find_8neighbors(i, j)
-                        total_tiles = len(neighbors)
-                        for el in neighbors:
-                            tile = self.board[el[0]][el[1]]
-                            if tile.is_revealed == True:
-                                if tile.value == "F":
-                                    flagged_mines += 1
-                                known_tiles += 1
-                        if ((mine_value - flagged_mines) == (total_tiles -  known_tiles)): # flag all unknowns
+                    if (self.board[i][j].is_revealed == True):
+                        if self.board[i][j].value != "F":
+                            mine_value = int(self.board[i][j].value)
+                            flagged_mines = 0
+                            known_tiles = 0
+                            neighbors = self.find_8neighbors(i, j)
+                            total_tiles = len(neighbors)
                             for el in neighbors:
                                 tile = self.board[el[0]][el[1]]
-                                if tile.is_revealed == False:
-                                    updated = True
-                                    tile.flag_tile()
-                        elif (flagged_mines == mine_value): # reveal all neighbors
-                            updated = True
-                            for el in neighbors:
-                                tile = self.board[el[0]][el[1]]
-                                self.auto_reveal(el[0], el[1])
+                                if tile.is_revealed == True:
+                                    if tile.value == "F":
+                                        flagged_mines += 1
+                                    known_tiles += 1
+                            if ((mine_value - flagged_mines) == (total_tiles -  known_tiles)): # flag all unknowns
+                                for el in neighbors:
+                                    tile = self.board[el[0]][el[1]]
+                                    if tile.is_revealed == False:
+                                        updated = True
+                                        tile.flag_tile()
+                            elif (flagged_mines == mine_value): # reveal all neighbors
+                                updated = True
+                                for el in neighbors:
+                                    tile = self.board[el[0]][el[1]]
+                                    self.auto_reveal(el[0], el[1])
+                    else:
+                        unknowns += 1
+        if unknowns == 0:
+                self.win_game()
 
     def make_board(self):
         tmp = []
+        init_prob = self.total_bomb_count/(self.row_count*self.col_count)
         for i in range(0, self.row_count + 1):
             del tmp[:]
             for j in range(0, self.col_count + 1):
-                tmp.append(Tile("l", i, j, 1.5, True))
+                tmp.append(Tile('z', i, j, init_prob, True))
             self.board.append(tmp[:])
+            for el in tmp: del el
 
         change_count = 0
         while change_count < self.total_bomb_count:
             rando_x = randint(1, (self.row_count))
             rando_y = randint(1, (self.col_count))
-            first = (rando_x != 1) and (rando_y != 1)
-            if (self.board[rando_x][rando_y].value != 'B' and first ):
-                    self.board[rando_x][rando_y].value = 'B'
-                    change_count += 1
+            first = not (rando_x == 1 and rando_y == 1)
+            if (self.board[rando_x][rando_y].value != 'B' and first):
+                self.board[rando_x][rando_y].value = 'B'
+                change_count += 1
         self.set_numbers()
 
     def print_board(self):
@@ -275,10 +395,9 @@ class MinesweeperAI:
         return ret
 
     def set_numbers(self):
-        """loop over every tile in the board
-           find surrounding tiles
-           count number of bombs,
-           set indicator from . to # of bombs"""
+        """ Loop over every tile in the board find surrounding tiles count
+            number of bombs, set indicator from . to # of bombs
+        """
         for i in range(1, self.row_count+1):
             for j in range(1, self.col_count+1):
                 #check if not bomb
@@ -303,6 +422,19 @@ class MinesweeperAI:
                     tile.is_revealed = True
                 elif tile.value == '0' and not tile.is_revealed:
                     self.auto_reveal(el[0],el[1])
+        elif self.board[x][y].value == "B":
+            self.lose_game()
+
+    def lose_game(self):
+        self.loss += 1
+        self.game_over_state = True
+        print("YOU LOSE.")
+
+
+    def win_game(self):
+        self.wins += 1
+        self.game_over_state = True
+        print("YOU WIN.")
 
     def reveal(self, x, y):
         if (x < 1) or (x > self.row_count) or (y < 1) or (y > self.col_count):
@@ -311,6 +443,7 @@ class MinesweeperAI:
             self.auto_reveal(int(x),int(y))
             return True
         else:
+            self.lose_game()
             print("bomb")
             return False
 
@@ -321,9 +454,18 @@ class Tile:
         self.value = value
         self.x_location = x_location
         self.y_location = y_location
-        self.prob = prob
+        self.prob = 0
         self.is_revealed = True
         self.prob_list=[]
+
+    def __delete__(self, instance):
+        del self.value
+        del self.x_location
+        del self.y_location
+        del self.prob
+        del self.is_revealed
+        del self.prob_list
+        print('deleted tile')
 
     def flag_tile(self):
         self.value = "F"
