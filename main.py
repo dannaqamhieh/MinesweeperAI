@@ -2,11 +2,12 @@
 from minesweeperAI import MinesweeperAI
 import random
 from random import randint
+import sys
 
-row_count = 8
-col_count = 8
-total_bomb_count = 10
-games_played = 10
+row_count = 10
+col_count = 10
+total_bomb_count = 35
+games_played = 1000
 seed = randint(0,100)
 total_wins = 0
 
@@ -22,6 +23,9 @@ for i in range(games_played):
     result = game.AI_game()
     total_wins += result
     del game
+
+
+
 
 print("\n-------------------- Trial Over --------------------\n")
 print("Total games played:", games_played)

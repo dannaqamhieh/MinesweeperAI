@@ -5,7 +5,6 @@ class MinesweeperAI:
 
     wins = 0
     loss = 0
-    board = []
 
     def __init__(self, row_count, col_count, total_bomb_count,
                  seed=randint(0,100), bomb_locations=[], board=[],
@@ -14,6 +13,7 @@ class MinesweeperAI:
         self.col_count = col_count
         self.total_bomb_count = total_bomb_count
         self.game_over_state = False
+        self.board = []
 
     def __delete__(self, instance):
         del self.board
@@ -35,35 +35,54 @@ class MinesweeperAI:
         # print("\n-----------------------------------------------------\n")
         self.game_over_state = False
         self.make_board()
-        # self.print_board()
+        self.print_board()
         self.hide_board()
         self.reveal(1, 1)
         self.update_probs()
-        self.greedy_prob_method()
+        # self.greedy_prob_method()
+        self.average_prob_method()
 
 
         while self.game_over_state == False:
             # self.print_board()
             self.trivial_parse()
+            self.check_status()
             # self.print_board()
             # self.check_board()
             self.update_probs()
-            self.greedy_prob_method()
+            # self.greedy_prob_method()
+            self.average_prob_method()
             # self.print_all_probs()
             self.AI_reveal()
             self.update_probs()
-            self.greedy_prob_method()
+            # self.greedy_prob_method()
+            self.average_prob_method()
             # self.print_board()
             # self.print_all_prob_lists()
             # self.print_all_probs()
-            print(self.game_over_state)
 
+        for row in self.board:
+            for el in row:
+                del el
+        self.print_board()
         # self.print_board()
         # self.print_all_probs()
-        if self.wins == 1:
+        # print(self.wins)
+        if self.wins > 0:
             return 1
         else:
             return 0
+
+    def check_status(self):
+        if self.get_num_flags() == self.total_bomb_count:
+            self.game_over_state = True
+            #now open up the remaining tiles
+            for i in range(1, self.row_count + 1):
+                for j in range(1, self.col_count + 1):
+                    tile = self.board[i][j]
+                    if tile.is_revealed == False:
+                        self.reveal(i, j)
+            self.win_game()
 
     def AI_reveal(self):
         """ Parse through every prob value for every tile in the grid. Reveal
@@ -85,6 +104,7 @@ class MinesweeperAI:
         # print("Reveal: (", lowest_tile.x_location, ",", lowest_tile.y_location, "):", lowest_tile.prob)
         if lowest_found == True:
             self.auto_reveal(lowest_tile.x_location, lowest_tile.y_location)
+        self.check_status()
 
     def average_prob_method(self):
         """ Parse through every tile in the grid. Update the prob value
@@ -96,9 +116,9 @@ class MinesweeperAI:
                 list = tile.prob_list
                 if len(list) > 0:
                     total = 0
-                    for i in list:
-                        if i <= 1:
-                            total += idea
+                    for k in list:
+                        if k <= 1:
+                            total += k
                     average = total / len(list)
                     tile.prob = average
                 else:
@@ -244,13 +264,12 @@ class MinesweeperAI:
             print("No contradictions detected.")
 
     def get_num_flags(self):
-        ret = 0
+        flags = 0
         for i in range(1, self.row_count+1):
             for j in range(1, self.col_count+1):
-                if self.board[i][j].value != 'F':
-                    ret += 1
-
-        return ret
+                if self.board[i][j].value == 'F':
+                    flags += 1
+        return flags
 
     def trivial_parse(self):
         """ Parse through entire board. If a known tile has the same number of
@@ -259,14 +278,10 @@ class MinesweeperAI:
         tiles, flag all surrounding tiles. Loop until no changes can be made.
         """
         updated = True
-        # if self.get_num_flags() == self.total_bomb_count:
-        #     updated = False
-        #     for i in range(1, self.row_count+1):
-        #         for j in range(1, self.col_count+1):
-        #             if self.board[i][j].value != 'F' and not self.board[i][j].is_revealed:
-        #                 self.reveal(i, j)
-
+        count = 0
         while updated:
+            count += 1
+            if count > 25: break
             updated = False
             unknowns = 0
             for i in range(1, self.row_count + 1):
@@ -299,8 +314,12 @@ class MinesweeperAI:
                         unknowns += 1
         if unknowns == 0:
                 self.win_game()
+        self.check_status()
 
     def make_board(self):
+        if len(self.board) != 0:
+            del self.board[:]
+
         tmp = []
         init_prob = self.total_bomb_count/(self.row_count*self.col_count)
         for i in range(0, self.row_count + 1):
@@ -308,7 +327,6 @@ class MinesweeperAI:
             for j in range(0, self.col_count + 1):
                 tmp.append(Tile('z', i, j, init_prob, True))
             self.board.append(tmp[:])
-            for el in tmp: del el
 
         change_count = 0
         while change_count < self.total_bomb_count:
@@ -429,12 +447,17 @@ class MinesweeperAI:
         self.loss += 1
         self.game_over_state = True
         print("YOU LOSE.")
-
+        for row in self.board:
+            for el in row:
+                del el
 
     def win_game(self):
         self.wins += 1
         self.game_over_state = True
         print("YOU WIN.")
+        for row in self.board:
+            for el in row:
+                del el
 
     def reveal(self, x, y):
         if (x < 1) or (x > self.row_count) or (y < 1) or (y > self.col_count):
